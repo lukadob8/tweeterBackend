@@ -650,3 +650,196 @@ def commentLikeActions():
                 return Response(json.dumps(userData, default=str), mimetype="application/json", status=200)
             else:
                 return Response("An error occured.", mimetype="text/html", status=500)
+    elif request.method == "POST":
+        conn = None
+        cursor = None
+        loginToken = request.json.get("loginToken")
+        commentId = request.json.get("commentId")
+        rows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT userId FROM user_session WHERE loginToken=?", [loginToken])
+            userId = cursor.fetchall()[0][0]
+            cursor.execute("INSERT INTO comment_likes(commentId, userId) VALUES(?, ?)", [commentId, userId])
+            conn.commit()
+            rows = cursor.rowcount
+            cursor.execute("SELECT comment_likes.*, users.username FROM comment_likes INNER JOIN users ON users.id = comment_likes.userId WHERE comment_likes.commentId=?", [commentId])
+            like = cursor.fetchall()
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if rows == 1:
+                userData = {
+                    "commentId": like[0][0],
+                    "userId": like[0][1],
+                    "username": like[0][3]
+                }
+                return Response(json.dumps(userData, default=str), mimetype="application.json", status=201)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
+    elif request.method == "DELETE":
+        conn = None
+        cursor = None
+        loginToken = request.json.get("loginToken")
+        commentId = request.json.get("commentId")
+        rows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT userId FROM user_session WHERE loginToken=?", [loginToken])
+            userId = cursor.fetchall()[0][0]
+            cursor.execute("SELECT userId FROM comment_likes WHERE commentId=?", [commentId])
+            likeOwner = cursor.fetchall()[0][0]
+            if userId == likeOwner:
+                cursor.execute("DELETE FROM comment_likes WHERE commentId=? AND userId=?", [commentId, userId])
+                conn.commit()
+                rows = cursor.rowcount
+            else:
+                print("You cannot delete other people's comments.")
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if rows == 1:
+                return Response("Comment unliked.", mimetype="text/html", status=204)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
+
+@app.route('/api/follows', methods = ["GET", "POST", "DELETE"])
+def followsActions():
+    if request.method == "GET":
+        conn = None
+        cursor = None
+        userId = request.args.get("userId")
+        follows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT follow.followedId, users.email, users.username, users.bio, users.birthdate FROM follow INNER JOIN users ON users.id = follow.followerId WHERE follow.followerId=?", [userId])
+            follows = cursor.fetchall()
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if follows != None:
+                userData = []
+                for follow in follows:
+                    userData.append({
+                        "userId": follow[0],
+                        "email": follow[1],
+                        "username": follow[2],
+                        "bio": follow[3],
+                        "birthdate": follow[4]
+                    })
+                return Response(json.dumps(userData, default=str), mimetype="application/json", status=200)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
+    elif request.method == "POST":
+        conn = None
+        cursor = None
+        loginToken = request.json.get("loginToken")
+        followId = request.json.get("followId")
+        rows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT userId FROM user_session WHERE loginToken=?", [loginToken])
+            userId = cursor.fetchall()[0][0]
+            if userId != followId:
+                cursor.execute("INSERT INTO follow(followerId, followedId) VALUES(?, ?)", [userId, followId])
+                conn.commit()
+                rows = cursor.rowcount
+            else:
+                print("You cannot follow yourself.")
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if rows == 1:
+                return Response("User followed.", mimetype="text/html", status=204)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
+    elif request.method == "DELETE":
+        conn = None
+        cursor = None
+        loginToken = request.json.get("loginToken")
+        followId = request.json.get("followId")
+        rows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT userId FROM user_session WHERE loginToken=?", [loginToken])
+            userId = cursor.fetchall()[0][0]
+            cursor.execute("DELETE FROM follow WHERE followerId=? AND followedId=?", [userId, followId])
+            conn.commit()
+            rows = cursor.rowcount
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if rows == 1:
+                return Response("User unfollowed.", mimetype="text/html", status=204)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
+
+@app.route('/api/followers', methods = ["GET"])
+def followersActions():
+    if request.method == "GET":
+        conn = None
+        cursor = None
+        userId = request.json.get("userId")
+        follows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT follow.followedId, users.email, users.username, users.bio, users.birthdate FROM follow INNER JOIN users ON users.id = follow.followerId WHERE follow.followerId=?", [userId])
+            follows = cursor.fetchall()
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if follows != None:
+                userData = []
+                for follow in follows:
+                    userData.append({
+                        "userId": follow[0],
+                        "email": follow[1],
+                        "username": follow[2],
+                        "bio": follow[3],
+                        "birthdate": follow[4]
+                    })
+                return Response(json.dumps(userData, default=str), mimetype="application/json", status=200)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
