@@ -13,7 +13,7 @@ def userAction():
     if request.method == "GET":
         conn = None
         cursor = None
-        userId = request.args.get("id")
+        userId = request.args.get("userId")
         user = None
         try:
             conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
@@ -360,7 +360,7 @@ def tweetActions():
             cursor.execute("SELECT userId FROM tweets WHERE id=?", [tweetId])
             tweetOwner = cursor.fetchall()[0][0]
             if userId == tweetOwner:
-                cursor.execute("DELETE * FROM tweets WHERE id=?", [tweetId])
+                cursor.execute("DELETE FROM tweets WHERE id=?", [tweetId])
                 conn.commit()
                 rows = cursor.rowcount
             else:
@@ -515,9 +515,10 @@ def commentActions():
             userId = cursor.fetchall()[0][0]
             cursor.execute("INSERT INTO comments(content, tweetId, userId) VALUES(?, ?, ?)", [content, tweetId, userId])
             conn.commit()
-            # GET COMMENT ID
             rows = cursor.rowcount
-            cursor.execute("SELECT comments.*, users.username FROM comments INNER JOIN users ON users.id = comments.userId WHERE comments.tweetId=?", [tweetId])
+            cursor.execute("SELECT id FROM comments WHERE content=? AND userId=?", [content, userId])
+            commentId = cursor.fetchall()[0][0]
+            cursor.execute("SELECT comments.*, users.username FROM comments INNER JOIN users ON users.id = comments.userId WHERE comments.id=?", [commentId])
             comment = cursor.fetchall()
         except Exception as error:
             print("SOMETHING WENT WRONG (THIS IS LAZY)")
@@ -623,12 +624,12 @@ def commentLikeActions():
     if request.method == "GET":
         conn = None
         cursor = None
-        commentId = request.json.get("commentId")
+        commentId = request.args.get("commentId")
         likes = None
         try:
             conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
             cursor = conn.cursor()
-            cursor.execute("SELECT comments.id, comments.userId, users.username FROM comments INNER JOIN users ON users.id = comments.userId WHERE comments.id=?", [commentId])
+            cursor.execute("SELECT comment_likes.commentId, comment_likes.userId, users.username FROM comment_likes INNER JOIN users ON users.id = comment_likes.userId WHERE comment_likes.commentId=?", [commentId])
             likes = cursor.fetchall()
         except Exception as error:
             print("SOMETHING WENT WRONG (THIS IS LAZY)")
@@ -727,7 +728,7 @@ def followsActions():
         try:
             conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
             cursor = conn.cursor()
-            cursor.execute("SELECT follow.followedId, users.email, users.username, users.bio, users.birthdate FROM follow INNER JOIN users ON users.id = follow.followerId WHERE follow.followerId=?", [userId])
+            cursor.execute("SELECT follow.followedId, users.email, users.username, users.bio, users.birthdate FROM follow INNER JOIN users ON users.id = follow.followedId WHERE follow.followerId=?", [userId])
             follows = cursor.fetchall()
         except Exception as error:
             print("SOMETHING WENT WRONG (THIS IS LAZY)")
