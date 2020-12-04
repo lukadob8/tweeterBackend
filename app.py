@@ -844,3 +844,160 @@ def followersActions():
                 return Response(json.dumps(userData, default=str), mimetype="application/json", status=200)
             else:
                 return Response("An error occured.", mimetype="text/html", status=500)
+
+
+# BONUS CONTENT--------------------------------------------------------------------------------------------------
+
+@app.route('/api/nested-comments', methods = ["GET", "POST", "PATCH", "DELETE"])
+def nestedComments():
+    if request.method == "GET":
+        conn = None
+        cursor = None
+        commentId = request.args.get("commentId")
+        comments = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT nested_comments.*, users.username FROM nested_comments INNER JOIN users ON users.id = nested_comments.userId WHERE nested_comments.commentId=?", [commentId])
+            comments = cursor.fetchall()
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if comments != None:
+                userData = []
+                for comment in comments:
+                    userData.append({
+                        "nestedCommentId": comment[4],
+                        "commentId": comment[2],
+                        "userId": comment[3],
+                        "username": comment[5],
+                        "content": comment[0],
+                        "createdAt": comment[1]
+                    })
+                return Response(json.dumps(userData, default=str), mimetype="application/json", status=200)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
+    elif request.method == "POST":
+        conn = None
+        cursor = None
+        loginToken = request.json.get("loginToken")
+        commentId = request.json.get("commentId")
+        content = request.json.get("content")
+        rows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT userId FROM user_session WHERE loginToken=?", [loginToken])
+            userId = cursor.fetchall()[0][0]
+            cursor.execute("INSERT INTO nested_comments(content, commentId, userId) VALUES(?, ?, ?)", [content, commentId, userId])
+            conn.commit()
+            rows = cursor.rowcount
+            nestedCommentId = cursor.lastrowid
+            cursor.execute("SELECT nested_comments.*, users.username FROM nested_comments INNER JOIN users ON users.id = nested_comments.userId WHERE nested_comments.id = ?", [nestedCommentId])
+            comment = cursor.fetchall()
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if rows == 1:
+                userData = {
+                    "nestedCommentId": comment[0][4],
+                    "commentId": commentId,
+                    "userId": userId,
+                    "username": comment[0][5],
+                    "content": content,
+                    "createdAt": comment[0][1]
+                }
+                return Response(json.dumps(userData, default=str), mimetype="application/json", status=201)
+            else:
+                return Response("An error occured.", mimetype="text/json", status=500)
+    elif request.method == "PATCH":
+        conn = None
+        cursor = None
+        loginToken = request.json.get("loginToken")
+        nestedCommentId = request.json.get("nestedCommentId")
+        content = request.json.get("content")
+        rows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT userId FROM user_session WHERE loginToken=?", [loginToken])
+            userId = cursor.fetchall()[0][0]
+            print(userId)
+            print(nestedCommentId)
+            cursor.execute("SELECT userId FROM nested_comments WHERE id=?", [nestedCommentId])
+            commentOwner = cursor.fetchall()[0][0]
+            print(commentOwner)
+            if userId == commentOwner:
+                cursor.execute("UPDATE nested_comments SET content=? WHERE id=?", [content, nestedCommentId])
+                conn.commit()
+                rows = cursor.rowcount
+            else:
+                print("You do not own this comment.")
+            if rows == 1:
+                cursor.execute("SELECT nested_comments.*, users.username FROM nested_comments INNER JOIN users ON users.id = nested_comments.userId WHERE nested_comments.id=?", [nestedCommentId])
+                comment = cursor.fetchall()
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if rows == 1:
+                userData = {
+                    "commentId": nestedCommentId,
+                    "tweetId": comment[0][2],
+                    "userId": userId,
+                    "username": comment[0][5],
+                    "content": content,
+                    "createdAt": comment[0][1]
+                }
+                return Response(json.dumps(userData, default=str), mimetype="application/json", status=200)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
+    elif request.method == "DELETE":
+        conn = None
+        cursor = None
+        loginToken = request.json.get("loginToken")
+        nestedCommentId = request.json.get("nestedCommentId")
+        rows = None
+        try:
+            conn = mariadb.connect(host = dbcreds.host, password = dbcreds.password, user = dbcreds.user, port = dbcreds.port, database = dbcreds.database)
+            cursor = conn.cursor()
+            cursor.execute("SELECT userId FROM user_session WHERE loginToken=?", [loginToken])
+            userId = cursor.fetchall()[0][0]
+            cursor.execute("SELECT userId FROM nested_comments WHERE id=?", [nestedCommentId])
+            commentOwner = cursor.fetchall()[0][0]
+            if userId == commentOwner:
+                cursor.execute("DELETE FROM nested_comments WHERE id=?", [nestedCommentId])
+                conn.commit()
+                rows = cursor.rowcount
+            else:
+                print("You do not own this comment.")
+        except Exception as error:
+            print("SOMETHING WENT WRONG (THIS IS LAZY)")
+            print(error)
+        finally:
+            if cursor != None:
+                cursor.close()
+            if conn != None:
+                conn.rollback()
+                conn.close()
+            if rows == 1:
+                return Response("Comment deleted successfully.", mimetype="text/html", status=204)
+            else:
+                return Response("An error occured.", mimetype="text/html", status=500)
